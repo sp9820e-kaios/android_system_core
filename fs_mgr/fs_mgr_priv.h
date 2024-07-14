@@ -76,6 +76,9 @@
 #define MF_FORCECRYPT   0x400
 #define MF_NOEMULATEDSD 0x800 /* no emulated sdcard daemon, sd card is the only
                                  external storage */
+// SPRD: add for secure boot
+#define MF_SECUREBOOT 0x8000
+
 #define MF_NOTRIM       0x1000
 #define MF_FILEENCRYPTION 0x2000
 #define MF_FORMATTABLE  0x4000

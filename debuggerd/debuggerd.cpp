@@ -342,8 +342,15 @@ static void redirect_to_32(int fd, debugger_request_t* request) {
 }
 #endif
 
+extern int check_corefile_limit();
+
 static void handle_request(int fd) {
   ALOGV("handle_request(%d)\n", fd);
+
+  //The log "unexpected waitpid response" and "tid exited before attach completed"
+  //in function wait_for_sigstop cause the check_corefile_limit not to be invoked.
+  //So call it here to check corefile limitation and close the coredump if necessary.
+  check_corefile_limit();
 
   debugger_request_t request;
   memset(&request, 0, sizeof(request));

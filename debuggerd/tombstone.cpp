@@ -53,14 +53,30 @@
 #include "machine.h"
 #include "tombstone.h"
 
+#include <utils/Timers.h>
+#ifdef HAVE_ANDROID_OS
+#include <linux/ioctl.h>
+#include <linux/rtc.h>
+#include <utils/Atomic.h>
+#include <linux/android_alarm.h>
+#endif
+
+
 #define STACK_WORDS 16
 
 #define MAX_TOMBSTONES  10
+#define MAX_COREDUMPS   4
 #define TOMBSTONE_DIR   "/data/tombstones"
 #define TOMBSTONE_TEMPLATE (TOMBSTONE_DIR"/tombstone_%02d")
 
+#define COREDUMP_DATA_DIR      "/data/corefile"
+#define COREDUMP_PATTERN_FILE  "/proc/sys/kernel/core_pattern"
+#define COREDUMP_NULL_PATTERN  "/dev/null"
+
 // Must match the path defined in NativeCrashListener.java
 #define NCRASH_SOCKET_PATH "/data/system/ndebugsocket"
+
+static char s_coredump_dir[64] = COREDUMP_DATA_DIR;
 
 static bool signal_has_si_addr(int sig) {
   switch (sig) {
@@ -135,8 +151,15 @@ static const char* get_sigcode(int signo, int code) {
       switch (code) {
         case SEGV_MAPERR: return "SEGV_MAPERR";
         case SEGV_ACCERR: return "SEGV_ACCERR";
+#if defined(SEGV_BNDERR)
+        case SEGV_BNDERR: return "SEGV_BNDERR";
+#endif
       }
+#if defined(SEGV_BNDERR)
+      static_assert(NSIGSEGV == SEGV_BNDERR, "missing SEGV_* si_code");
+#else
       static_assert(NSIGSEGV == SEGV_ACCERR, "missing SEGV_* si_code");
+#endif
       break;
     case SIGTRAP:
       switch (code) {
@@ -634,6 +657,15 @@ static void dump_abort_message(Backtrace* backtrace, log_t* log, uintptr_t addre
   _LOG(log, logtype::HEADER, "Abort message: '%s'\n", msg);
 }
 
+static int64_t elapsedRealtime()
+{
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  int64_t when = seconds_to_nanoseconds(ts.tv_sec) + ts.tv_nsec;
+  return (int64_t) nanoseconds_to_milliseconds(when);
+}
+
+
 // Dumps all information about the specified pid to the tombstone.
 static bool dump_crash(log_t* log, pid_t pid, pid_t tid, int signal, int si_code,
                        uintptr_t abort_msg_address, bool dump_sibling_threads,
@@ -655,6 +687,11 @@ static bool dump_crash(log_t* log, pid_t pid, pid_t tid, int signal, int si_code
 
   _LOG(log, logtype::HEADER,
        "*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***\n");
+  _LOG(log, logtype::HEADER,
+       "Native Crash TIME: %lld\n", (long long)elapsedRealtime());
+  _LOG(log, logtype::HEADER,
+       "*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***\n");
+
   dump_header_info(log);
   dump_thread_info(log, pid, tid);
 
@@ -780,6 +817,106 @@ static int activity_manager_connect() {
   return amfd;
 }
 
+int check_corefile_limit()
+{
+  DIR *d;
+  struct dirent *de;
+  int cur_core_count = 0;
+  FILE *fp = NULL;
+  char core_pattern[128] = {0};
+  char cmd[512] = {0};
+
+  fp = fopen(COREDUMP_PATTERN_FILE, "r");
+  if (NULL == fp)
+  {
+      ALOGE("open %s failed: %s\n", COREDUMP_PATTERN_FILE, strerror(errno));
+      return 1;
+  }
+
+  fgets(core_pattern, sizeof(core_pattern), fp);
+  fclose(fp);
+
+  /** core dump disabled */
+  if (0 == strncmp(COREDUMP_NULL_PATTERN, core_pattern, strlen(COREDUMP_NULL_PATTERN)))
+  {
+      return 1;
+  }
+
+  d = opendir(s_coredump_dir);
+  if (d == NULL)
+  {
+      return 1;
+  }
+
+  while ((de = readdir(d)) != NULL)
+  {
+      /* Ignore "." and ".." */
+      if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, ".."))
+       {
+           continue;
+       }
+
+      if( !strncmp(de->d_name, "core", 4))    //only match core-xx
+      {
+           cur_core_count++;
+      }
+  }
+  closedir(d);
+
+  // disable coredump if exceed the maximum
+  if(cur_core_count >= MAX_COREDUMPS)
+  {
+      snprintf(cmd, sizeof(cmd), "echo %s > %s", COREDUMP_NULL_PATTERN, COREDUMP_PATTERN_FILE);
+      system(cmd);
+      return 1;
+  }
+
+  return 0;
+}
+
+
+//add for dump map file
+void dump_crash_maps(unsigned pid)
+{
+    char data[1024] = {0};
+    char desfilename[128] = {0};
+    int  handler_des;
+    int  ret;
+    FILE *fp_maps = NULL;
+
+    if(1 == check_corefile_limit())
+    {
+        return ;
+    }
+
+    sprintf(data, "/proc/%d/maps", pid);
+    sprintf(desfilename,"%s/maps_%d", s_coredump_dir, pid);
+
+    //cp file to maps file.
+    fp_maps = fopen(data, "r");
+    if(fp_maps == NULL) {
+        return;
+    }
+
+    handler_des = open(desfilename, O_CREAT | O_EXCL | O_WRONLY, 0666);
+    if(handler_des < 0) {
+        fclose(fp_maps);
+        return;
+    }
+    fchown(handler_des, AID_SYSTEM, AID_SYSTEM);
+
+    while((ret = fread(data,1, 1024,fp_maps)) > 0)
+    {
+        write(handler_des, data, ret);
+    }
+
+    fclose(fp_maps);
+    close(handler_des);
+
+    return;
+}
+
+
 char* engrave_tombstone(pid_t pid, pid_t tid, int signal, int original_si_code,
                         uintptr_t abort_msg_address, bool dump_sibling_threads,
                         bool* detach_failed, int* total_sleep_time_usec) {
@@ -788,21 +925,10 @@ char* engrave_tombstone(pid_t pid, pid_t tid, int signal, int original_si_code,
   log.current_tid = tid;
   log.crashed_tid = tid;
 
-  if ((mkdir(TOMBSTONE_DIR, 0755) == -1) && (errno != EEXIST)) {
-    _LOG(&log, logtype::ERROR, "failed to create %s: %s\n", TOMBSTONE_DIR, strerror(errno));
-  }
-
-  if (chown(TOMBSTONE_DIR, AID_SYSTEM, AID_SYSTEM) == -1) {
-    _LOG(&log, logtype::ERROR, "failed to change ownership of %s: %s\n", TOMBSTONE_DIR, strerror(errno));
-  }
-
+  //dump maps & check corefile limit .
+  dump_crash_maps(pid); 
   int fd = -1;
-  char* path = NULL;
-  if (selinux_android_restorecon(TOMBSTONE_DIR, 0) == 0) {
-    path = find_and_open_tombstone(&fd);
-  } else {
-    _LOG(&log, logtype::ERROR, "Failed to restore security context, not writing tombstone.\n");
-  }
+  char* path = find_and_open_tombstone(&fd); 
 
   if (fd < 0) {
     _LOG(&log, logtype::ERROR, "Skipping tombstone write, nothing to do.\n");

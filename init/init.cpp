@@ -69,6 +69,8 @@ struct selabel_handle *sehandle_prop;
 
 static int property_triggers_enabled = 0;
 
+
+static char bootmode[PROP_VALUE_MAX];
 static char qemu[32];
 
 static struct action *cur_action = NULL;
@@ -190,6 +192,17 @@ void service_start(struct service *svc, const char *dynamic_args)
     // immediately takes it out of the restarting state if it was in there.
     svc->flags &= (~(SVC_DISABLED|SVC_RESTARTING|SVC_RESET|SVC_RESTART|SVC_DISABLED_START));
     svc->time_started = 0;
+    if( (((!strncmp(svc->name,"healthd",7))||
+	(!strncmp(svc->name,"bootanim",8))||
+	(!strncmp(svc->name,"zygote",6))||
+	(!strncmp(svc->name,"b2g",3))||
+	(!strncmp(svc->name,"surfaceflinger",14)))&&((!strcmp(bootmode, "charger"))) ) ||
+	((!strncmp(svc->name,"b2g",3))&&((!strcmp(bootmode, "autotest")))) )
+	{
+         ERROR("stopping '%s'\n", svc->name);
+         svc->flags |= SVC_DISABLED;
+         return;
+     }
 
     // Running processes require no additional work --- if they're in the
     // process of exiting, we've ensured that they will immediately restart
@@ -805,6 +818,8 @@ static void export_kernel_boot_props() {
         { "ro.boot.bootloader", "ro.bootloader", "unknown", },
         { "ro.boot.hardware",   "ro.hardware",   "unknown", },
         { "ro.boot.revision",   "ro.revision",   "0", },
+        //bug 866271 add ro.product.model.name for kaios
+        { "ro.boot.hardware.revision",   "ro.product.model.name",   "unknown", },
     };
     for (size_t i = 0; i < ARRAY_SIZE(prop_map); i++) {
         char value[PROP_VALUE_MAX];
@@ -986,6 +1001,14 @@ static void selinux_initialize(bool in_kernel_domain) {
     }
 }
 
+static void set_ramsize_property(void) {
+    char value[PROP_VALUE_MAX];
+    int  memsize = get_present_memory_size();
+
+    snprintf(value, PROP_VALUE_MAX, "%dM", memsize);
+    property_set("ro.ramsize", value);
+}
+
 int main(int argc, char** argv) {
     if (!strcmp(basename(argv[0]), "ueventd")) {
         return ueventd_main(argc, argv);
@@ -1075,6 +1098,9 @@ int main(int argc, char** argv) {
     signal_handler_init();
 
     property_load_boot_defaults();
+
+    set_ramsize_property();
+
     start_property_service();
 
     init_parse_config_file("/init.rc");
@@ -1096,14 +1122,26 @@ int main(int argc, char** argv) {
     queue_builtin_action(mix_hwrng_into_linux_rng_action, "mix_hwrng_into_linux_rng");
 
     // Don't mount filesystems or start core system services in charger mode.
-    char bootmode[PROP_VALUE_MAX];
+
     if (property_get("ro.bootmode", bootmode) > 0 && strcmp(bootmode, "charger") == 0) {
+        action_for_each_trigger("early-fs", action_add_queue_tail);
+        action_for_each_trigger("fs", action_add_queue_tail);
+        action_for_each_trigger("post-fs", action_add_queue_tail);
         action_for_each_trigger("charger", action_add_queue_tail);
     } else {
         action_for_each_trigger("late-init", action_add_queue_tail);
     }
 
     // Run all property triggers based on current state of the properties.
+    /* SPRD: add calibration mode in recovery @{ */
+    if (!strcmp(bootmode, "cali")) {
+	    action_for_each_trigger("cali", action_add_queue_tail);
+    }else if(!strcmp(bootmode,"factorytest")){
+        action_for_each_trigger("factorytest", action_add_queue_tail);
+    }else {
+	    action_for_each_trigger("normal", action_add_queue_tail);
+    }
+    /* @} */
     queue_builtin_action(queue_property_triggers_action, "queue_property_triggers");
 
     while (true) {

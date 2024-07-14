@@ -39,6 +39,8 @@
 #include <cutils/partition_utils.h>
 #include <cutils/android_reboot.h>
 #include <private/android_filesystem_config.h>
+#include <sys/ioctl.h>
+#include <mtd/ubi-user.h>
 
 #include "init.h"
 #include "keywords.h"
@@ -250,6 +252,34 @@ int do_mkdir(int nargs, char **args)
     return e4crypt_set_directory_policy(args[1]);
 }
 
+#define UBI_CTRL_DEV "/dev/ubi_ctrl"
+int do_ubiAttach(int nargs, char **args)
+{
+    struct ubi_attach_req req;
+    int fd;
+    int ret;
+
+    ERROR("do_ubiAttach %s %s\n",args[1],args[2]);
+
+    memset(&req, 0, sizeof(struct ubi_attach_req));
+    req.ubi_num =(typeof(req.ubi_num))atoi(args[1]);
+    if(-1 == req.ubi_num){
+        req.ubi_num = UBI_DEV_NUM_AUTO;
+    }
+    req.mtd_num = (typeof(req.mtd_num))mtd_name_to_number( args[2]);
+
+    fd = open(UBI_CTRL_DEV, O_RDONLY);
+    if(-1 == fd){
+        return -1;
+    }
+    ret = ioctl(fd, UBI_IOCATT, &req);
+    close(fd);
+    if(-1 == ret){
+        return -1;
+    }
+    return 0;
+}
+
 static struct {
     const char *name;
     unsigned flag;
@@ -402,9 +432,15 @@ int do_mount_all(int nargs, char **args)
     int child_ret = -1;
     int status;
     struct fstab *fstab;
+    char fstabfile[PROP_VALUE_MAX];
 
     if (nargs != 2) {
         return -1;
+    }
+
+    if (expand_props(fstabfile, args[1], sizeof(fstabfile)) == -1) {
+        ERROR("mount_all: cannot expand '%s' \n", args[1]);
+        return -EINVAL;
     }
 
     /*
@@ -430,7 +466,7 @@ int do_mount_all(int nargs, char **args)
     } else if (pid == 0) {
         /* child, call fs_mgr_mount_all() */
         klog_set_level(6);  /* So we can see what fs_mgr_mount_all() does */
-        fstab = fs_mgr_read_fstab(args[1]);
+        fstab = fs_mgr_read_fstab(fstabfile);
         child_ret = fs_mgr_mount_all(fstab);
         fs_mgr_free_fstab(fstab);
         if (child_ret == -1) {
@@ -821,6 +857,14 @@ int do_wait(int nargs, char **args)
         return -1;
 }
 
+int do_pipe(int nargs, char **args) {
+    mode_t mode = get_mode(args[1]);
+    if (mkfifo(args[2], mode) < 0) {
+        ERROR("peter do pipe error haha\n");
+    return -errno;
+    }
+    return 0;
+}
 /*
  * Callback to make a directory from the ext4 code
  */

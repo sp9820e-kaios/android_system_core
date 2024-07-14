@@ -72,6 +72,16 @@ struct verity_state {
 
 extern struct fs_info info;
 
+static int device_is_debuggable()
+{
+    int ret = -1;
+    char value[PROP_VALUE_MAX];
+    ret = __system_property_get("ro.debuggable", value);
+    if (ret < 0)
+        return ret;
+    return strcmp(value, "1") ? 0 : 1;
+}
+
 static RSAPublicKey *load_key(char *path)
 {
     FILE *f;
@@ -222,6 +232,11 @@ static int read_verity_metadata(uint64_t device_size, char *block_device, char *
     device = TEMP_FAILURE_RETRY(open(block_device, O_RDONLY | O_CLOEXEC));
     if (device == -1) {
         ERROR("Could not open block device %s (%s).\n", block_device, strerror(errno));
+        goto out;
+    }
+
+    if(device_is_debuggable()) {
+        retval = FS_MGR_SETUP_VERITY_DISABLED;
         goto out;
     }
 

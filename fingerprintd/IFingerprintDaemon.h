@@ -44,6 +44,30 @@ class IFingerprintDaemon : public IInterface, public IBinder::DeathRecipient {
            CLOSE_HAL = IBinder::FIRST_CALL_TRANSACTION + 9,
            INIT = IBinder::FIRST_CALL_TRANSACTION + 10,
            POST_ENROLL = IBinder::FIRST_CALL_TRANSACTION + 11,
+            // Add by silead begin
+            SET_SCREEN_STATUS = IBinder::FIRST_CALL_TRANSACTION + 12,
+            SET_FP_ENABLE_CREDENTIAL = IBinder::FIRST_CALL_TRANSACTION + 13,
+            GET_FP_ENABLE_CREDENTIAL = IBinder::FIRST_CALL_TRANSACTION + 14,
+            GET_FP_VIRTUAL_KEYCODE = IBinder::FIRST_CALL_TRANSACTION + 15,
+            SET_FP_VIRTUAL_KEYCODE = IBinder::FIRST_CALL_TRANSACTION + 16,
+            GET_FP_LONG_PRESS_VIRTUAL_KEYCODE = IBinder::FIRST_CALL_TRANSACTION + 17,
+            SET_FP_LONG_PRESS_VIRTUAL_KEYCODE = IBinder::FIRST_CALL_TRANSACTION + 18,
+            GET_FP_DOUBLE_CLICK_VIRTUAL_KEYCODE =  IBinder::FIRST_CALL_TRANSACTION + 19,
+            SET_FP_DOUBLE_CLICK_VIRTUAL_KEYCODE = IBinder::FIRST_CALL_TRANSACTION + 20,
+            GET_FP_VIRTUAL_KEY_STATE = IBinder::FIRST_CALL_TRANSACTION + 21,
+            SET_FP_VIRTUAL_KEY_STATE = IBinder::FIRST_CALL_TRANSACTION + 22,
+            GET_FP_WAKEUP_STATE = IBinder::FIRST_CALL_TRANSACTION + 23,
+            SET_FP_WAKEUP_STATE = IBinder::FIRST_CALL_TRANSACTION + 24,
+            GET_FINGERPRINT_STATE = IBinder::FIRST_CALL_TRANSACTION + 25,
+            SET_FINGERPRINT_STATE = IBinder::FIRST_CALL_TRANSACTION + 26,
+            SET_FP_POWER_FUNCTION_KEY_STATE = IBinder::FIRST_CALL_TRANSACTION + 27,
+            GET_FP_POWER_FUNCTION_KEY_STATE = IBinder::FIRST_CALL_TRANSACTION + 28,
+            SET_FP_IDLE_FUNCTION_KEY_STATE = IBinder::FIRST_CALL_TRANSACTION + 29,
+            GET_FP_IDLE_FUNCTION_KEY_STATE = IBinder::FIRST_CALL_TRANSACTION + 30,
+            SET_FP_WHOLE_FUNCTION_KEY_STATE = IBinder::FIRST_CALL_TRANSACTION + 31,
+            SET_FP_FUNCTION_KEY_STATE = IBinder::FIRST_CALL_TRANSACTION + 32,
+            GET_FP_FUNCTION_KEY_STATE = IBinder::FIRST_CALL_TRANSACTION + 33,
+           // Add by silead end
         };
 
         IFingerprintDaemon() { }
@@ -64,6 +88,30 @@ class IFingerprintDaemon : public IInterface, public IBinder::DeathRecipient {
         virtual int32_t setActiveGroup(int32_t groupId, const uint8_t* path, ssize_t pathLen) = 0;
         virtual int64_t openHal() = 0;
         virtual int32_t closeHal() = 0;
+        // Add by silead begin
+        virtual int32_t setFPScreenStatus(int32_t screenStatus) = 0;
+        virtual int32_t setFPEnableCredential(int32_t index, int32_t enable) = 0;
+        virtual int32_t getFPEnableCredential(int32_t index)=0;
+        virtual int32_t getFPVirtualKeyCode()=0;
+        virtual int32_t setFPVirtualKeyCode(int virtualKeyCode)=0;
+        virtual int32_t getFPLongPressVirtualKeyCode()=0;
+        virtual int32_t setFPLongPressVirtualKeyCode(int virtualKeyCode)=0;
+        virtual int32_t getFPDouClickVirtualKeyCode()=0;
+        virtual int32_t setFPDouClickVirtualKeyCode(int virtualKeyCode)=0;
+        virtual int32_t getFPVirtualKeyState()=0;
+        virtual int32_t setFPVirtualKeyState(int virtualKeyState)=0;
+        virtual int32_t getFPWakeUpState()=0;
+        virtual int32_t setFPWakeUpState(int wakeUpState)=0;
+        virtual int32_t getFingerPrintState()=0;
+        virtual int32_t setFingerPrintState(int32_t fingerPrintState)=0;
+        virtual int32_t setFPPowerFuncKeyState(int32_t funcKeyState)=0;
+        virtual int32_t getFPPowerFuncKeyState()=0;
+        virtual int32_t setFPIdleFuncKeyState(int32_t funcKeyState)=0;
+        virtual int32_t getFPIdleFuncKeyState()=0;
+        virtual int32_t setFPWholeFuncKeyState(int funcKeyState)=0;
+        virtual int32_t setFPFunctionKeyState(int index, int enable)=0;
+        virtual int32_t getFPFunctionKeyState(int index)=0;
+        // Add by silead end
 
         // DECLARE_META_INTERFACE - C++ client interface not needed
         static const android::String16 descriptor;

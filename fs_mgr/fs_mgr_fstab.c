@@ -28,10 +28,18 @@ struct fs_mgr_flag_values {
     char *key_loc;
     char *verity_loc;
     long long part_length;
+    /* SPRD: support double sdcard add for internal SD  @{ */
+    char *partnam;
+    char *vold_opt;
+    /* @} */
     char *label;
     int partnum;
     int swap_prio;
     unsigned int zram_size;
+    /* SPRD: add for secure boot @{ */
+    char *secure_boot;
+    char *previous_mountpoint;
+    /* @} */
 };
 
 struct flag_list {
@@ -70,6 +78,8 @@ static struct flag_list fs_mgr_flags[] = {
     { "recoveryonly",MF_RECOVERYONLY },
     { "swapprio=",   MF_SWAPPRIO },
     { "zramsize=",   MF_ZRAMSIZE },
+    // SPRD: add for secure boot
+    { "secureboot=", MF_SECUREBOOT },
     { "verify",      MF_VERIFY },
     { "noemulatedsd", MF_NOEMULATEDSD },
     { "notrim",       MF_NOTRIM },
@@ -154,6 +164,8 @@ static int parse_flags(char *flags, struct flag_list *fl,
                     char *label_start;
                     char *label_end;
                     char *part_start;
+                    // SPRD: support double sdcard
+                    char *vold_opt_start;
 
                     label_start = strchr(p, '=') + 1;
                     label_end = strchr(p, ':');
@@ -161,8 +173,26 @@ static int parse_flags(char *flags, struct flag_list *fl,
                         flag_vals->label = strndup(label_start,
                                                    (int) (label_end - label_start));
                         part_start = strchr(p, ':') + 1;
+                        /* SPRD: support double sdcard
+                         * add vold option for storage @{
+                         */
+                        vold_opt_start = strchr(part_start, ':');
+                        if (vold_opt_start) {
+                            *vold_opt_start = '\0';
+                            vold_opt_start += 1;
+                            flag_vals->vold_opt = strdup(vold_opt_start);
+                        }
+                        /* @} */
                         if (!strcmp(part_start, "auto")) {
                             flag_vals->partnum = -1;
+                        /*SPRD: support double sdcard this change for find partition by partition
+                         * name for internal SD @{
+                         */
+                        } else if (!strncmp(part_start, "by-name", 7)){
+                            char *partnam_start = strchr(part_start, '=') + 1;
+                            flag_vals->partnam = strdup(partnam_start);
+                            flag_vals->partnum = -2;
+                        /* @} */
                         } else {
                             flag_vals->partnum = strtol(part_start, NULL, 0);
                         }
@@ -178,6 +208,22 @@ static int parse_flags(char *flags, struct flag_list *fl,
                         flag_vals->zram_size = calculate_zram_size(val);
                     else
                         flag_vals->zram_size = val;
+                /* SPRD: add for secure boot @{ */
+                } else if ((fl[i].flag == MF_SECUREBOOT) && flag_vals) {
+                    char *sec_start;
+                    char *sec_end;
+                    sec_start = strchr(p, '=') + 1;
+                    sec_end = strchr(p, ':');
+                    if (sec_end) {
+                        flag_vals->secure_boot = strndup(sec_start, (int) (sec_end - sec_start));
+                        flag_vals->previous_mountpoint = strdup(strchr(p, ':') + 1);
+                        printf("previous_mountpoint = %s, secure_boot = %s\n", flag_vals->previous_mountpoint, flag_vals->secure_boot);
+                    }else{
+                       flag_vals->secure_boot = strdup(sec_start);
+                       flag_vals->previous_mountpoint = NULL;
+                       printf("previous_mountpoint222 = %s, secure_boot = %s\n", flag_vals->previous_mountpoint, flag_vals->secure_boot);
+                    }
+                /* @} */
                 }
                 break;
             }
@@ -326,9 +372,17 @@ struct fstab *fs_mgr_read_fstab(const char *fstab_path)
         fstab->recs[cnt].verity_loc = flag_vals.verity_loc;
         fstab->recs[cnt].length = flag_vals.part_length;
         fstab->recs[cnt].label = flag_vals.label;
+        /* SPRD: support double sdcard add for internal SD @{ */
+        fstab->recs[cnt].partnam = flag_vals.partnam;
+        fstab->recs[cnt].vold_opt = flag_vals.vold_opt;
+        /* @} */
         fstab->recs[cnt].partnum = flag_vals.partnum;
         fstab->recs[cnt].swap_prio = flag_vals.swap_prio;
         fstab->recs[cnt].zram_size = flag_vals.zram_size;
+        /* SPRD: add for secure boot @{ */
+        fstab->recs[cnt].secure_boot = flag_vals.secure_boot;
+        fstab->recs[cnt].previous_mountpoint = flag_vals.previous_mountpoint;
+        /* @} */
         cnt++;
     }
     fclose(fstab_file);
@@ -358,7 +412,15 @@ void fs_mgr_free_fstab(struct fstab *fstab)
         free(fstab->recs[i].fs_type);
         free(fstab->recs[i].fs_options);
         free(fstab->recs[i].key_loc);
+        /* SPRD: support double sdcard add for internal SD @{ */
+        if (fstab->recs[i].partnam) free(fstab->recs[i].partnam);
+        if (fstab->recs[i].vold_opt) free(fstab->recs[i].vold_opt);
+        /* @} */
         free(fstab->recs[i].label);
+        /* SPRD: add for secure boot @{ */
+        free(fstab->recs[i].secure_boot);
+        if(fstab->recs[i].previous_mountpoint) free(fstab->recs[i].previous_mountpoint);
+        /* @} */
     }
 
     /* Free the fstab_recs array created by calloc(3) */

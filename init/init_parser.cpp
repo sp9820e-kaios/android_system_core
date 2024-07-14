@@ -173,6 +173,7 @@ static int lookup_keyword(const char *s)
         break;
     case 'p':
         if (!strcmp(s, "owerctl")) return K_powerctl;
+        if (!strcmp(s, "ipe")) return K_pipe; //sprd add for loopback test
         break;
     case 'r':
         if (!strcmp(s, "estart")) return K_restart;
@@ -199,6 +200,7 @@ static int lookup_keyword(const char *s)
         break;
     case 'u':
         if (!strcmp(s, "ser")) return K_user;
+        if (!strcmp(s, "biattach")) return K_ubiattach;
         break;
     case 'v':
         if (!strcmp(s, "erity_load_state")) return K_verity_load_state;

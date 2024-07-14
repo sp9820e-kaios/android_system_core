@@ -138,6 +138,184 @@ int32_t FingerprintDaemonProxy::postEnroll() {
     return mDevice->post_enroll(mDevice);
 }
 
+// Add by silead begin
+int32_t FingerprintDaemonProxy::setFPScreenStatus(int32_t screenStatus){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE SetFPScreenStatus, screenStatus=%d\n", screenStatus);
+    if(mDevice){
+        return mDevice->setFPScreenStatus(screenStatus);
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::setFPEnableCredential(int32_t index, int32_t enable){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE setFPEnableCredential, (index=%d, enable=%d)\n", index, enable);
+    if(mDevice){
+        return mDevice->setFPEnableCredential(index, enable);
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::getFPEnableCredential(int32_t index){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE getFPEnableCredential, index=%d\n", index);
+    if(mDevice){
+        return mDevice->getFPEnableCredential(index);
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::setFPFunctionKeyState(int32_t index, int32_t enable){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE setFPFunctionKeyState, (index=%d, enable=%d)\n", index, enable);
+    if(mDevice){
+        return mDevice->setFPFunctionKeyState(index, enable);
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::getFPFunctionKeyState(int32_t index){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE getFPFunctionKeyState, index=%d\n", index);
+    if(mDevice){
+        return mDevice->getFPFunctionKeyState(index);
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::getFPVirtualKeyCode(){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE getFPVirtualKeyCode\n");
+    if(mDevice){
+        return mDevice->getFPVirtualKeyCode();
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::setFPVirtualKeyCode(int virtualKeyCode){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE setFPVirtualKeyCode, VirtualKeyCode=%d\n", virtualKeyCode);
+    if(mDevice){
+        return mDevice->setFPVirtualKeyCode(virtualKeyCode);
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::getFPLongPressVirtualKeyCode(){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE getFPLongPressVirtualKeyCode\n");
+    if(mDevice){
+        return mDevice->getFPLongPressVirtualKeyCode();
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::setFPLongPressVirtualKeyCode(int virtualKeyCode){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE setFPLongPressVirtualKeyCode, VirtualKeyCode=%d\n", virtualKeyCode);
+    if(mDevice){
+        return mDevice->setFPLongPressVirtualKeyCode(virtualKeyCode);
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::getFPDouClickVirtualKeyCode(){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE getFPDouClickVirtualKeyCode\n");
+    if(mDevice){
+        return mDevice->getFPDouClickVirtualKeyCode();
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::setFPDouClickVirtualKeyCode(int virtualKeyCode){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE setFPDouClickVirtualKeyCode, VirtualKeyCode=%d\n", virtualKeyCode);
+    if(mDevice){
+        return mDevice->setFPDouClickVirtualKeyCode(virtualKeyCode);
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::getFPVirtualKeyState(){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE getFPVirtualKeyState\n");
+    if(mDevice){
+        return mDevice->getFPVirtualKeyState();
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::setFPVirtualKeyState(int virtualKeyState){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE setFPVirtualKeyState, VirtualKeyState=%d\n", virtualKeyState);
+    if(mDevice){
+        return mDevice->setFPVirtualKeyState(virtualKeyState);
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::getFPWakeUpState(){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE getFPWakeUpState\n");
+    if(mDevice){
+        return mDevice->getFPWakeUpState();
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::setFPWakeUpState(int wakeUpState){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE setFPWakeUpState, WakeUpState=%d\n", wakeUpState);
+    if(mDevice){
+        return mDevice->setFPWakeUpState(wakeUpState);
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::getFingerPrintState(){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE getFingerPrintState\n");
+    if(mDevice){
+        return mDevice->getFingerPrintState();
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::setFingerPrintState(int32_t fingerPrintState){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE setFingerPrintState, fingerPrintState=%d\n", fingerPrintState);
+    if(mDevice){
+        return mDevice->setFingerPrintState(fingerPrintState);
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::setFPPowerFuncKeyState(int32_t funcKeyState){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE setFPPowerFuncKeyState, FuncKeyState=%d\n", funcKeyState);
+    if(mDevice){
+        return mDevice->setFPPowerFuncKeyState(funcKeyState);
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::getFPPowerFuncKeyState(){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE getFPPowerFuncKeyState\n");
+    if(mDevice){
+        return mDevice->getFPPowerFuncKeyState();
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::setFPIdleFuncKeyState(int32_t funcKeyState){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE setFPIdleFuncKeyState, funcKeyState=%d\n", funcKeyState);
+    if(mDevice){
+        return mDevice->setFPIdleFuncKeyState(funcKeyState);
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::getFPIdleFuncKeyState(){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE getFPIdleFuncKeyState\n");
+    if(mDevice){
+        return mDevice->getFPIdleFuncKeyState();
+    }
+    return -1;
+}
+
+int32_t FingerprintDaemonProxy::setFPWholeFuncKeyState(int funcKeyState){
+    ALOG(LOG_VERBOSE, LOG_TAG, " SLCODE setFPWholeFuncKeyState, funcKeyState=%d\n", funcKeyState);
+    if(mDevice){
+        return mDevice->setFPWholeFuncKeyState(funcKeyState);
+    }
+    return -1;
+}
+// Add by silead end
+
 int32_t FingerprintDaemonProxy::stopEnrollment() {
     ALOG(LOG_VERBOSE, LOG_TAG, "stopEnrollment()\n");
     return mDevice->cancel(mDevice);

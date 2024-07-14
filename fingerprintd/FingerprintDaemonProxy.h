@@ -44,6 +44,30 @@ class FingerprintDaemonProxy : public BnFingerprintDaemon {
         virtual int32_t setActiveGroup(int32_t groupId, const uint8_t* path, ssize_t pathLen);
         virtual int64_t openHal();
         virtual int32_t closeHal();
+        // Add by silead begin
+        virtual int32_t setFPScreenStatus(int32_t screenStatus);
+        virtual int32_t setFPEnableCredential(int32_t index, int32_t enable);
+        virtual int32_t getFPEnableCredential(int32_t index);
+        virtual int32_t getFPVirtualKeyCode();
+        virtual int32_t setFPVirtualKeyCode(int virtualKeyCode);
+        virtual int32_t getFPLongPressVirtualKeyCode();
+        virtual int32_t setFPLongPressVirtualKeyCode(int virtualKeyCode);
+        virtual int32_t getFPDouClickVirtualKeyCode();
+        virtual int32_t setFPDouClickVirtualKeyCode(int virtualKeyCode);
+        virtual int32_t getFPVirtualKeyState();
+        virtual int32_t setFPVirtualKeyState(int virtualKeyState);
+        virtual int32_t getFPWakeUpState();
+        virtual int32_t setFPWakeUpState(int wakeUpState);
+        virtual int32_t getFingerPrintState();
+        virtual int32_t setFingerPrintState(int32_t fingerPrintState);
+        virtual int32_t setFPPowerFuncKeyState(int32_t funcKeyState);
+        virtual int32_t getFPPowerFuncKeyState();
+        virtual int32_t setFPIdleFuncKeyState(int32_t funcKeyState);
+        virtual int32_t getFPIdleFuncKeyState();
+        virtual int32_t setFPWholeFuncKeyState(int funcKeyState);
+        virtual int32_t setFPFunctionKeyState(int index, int enable);
+        virtual int32_t getFPFunctionKeyState(int index);
+        // Add by silead end
 
     private:
         FingerprintDaemonProxy();

@@ -38,6 +38,8 @@ int do_load_all_props(int nargs, char **args);
 int do_verity_load_state(int nargs, char **args);
 int do_verity_update_state(int nargs, char **args);
 int do_wait(int nargs, char **args);
+int do_pipe(int nargs, char **args);
+int do_ubiAttach(int nargs, char **args);
 #define __MAKE_KEYWORD_ENUM__
 #define KEYWORD(symbol, flags, nargs, func) K_##symbol,
 enum {
@@ -97,6 +99,8 @@ enum {
     KEYWORD(verity_load_state,      COMMAND, 0, do_verity_load_state)
     KEYWORD(verity_update_state,    COMMAND, 0, do_verity_update_state)
     KEYWORD(wait,        COMMAND, 1, do_wait)
+    KEYWORD(pipe,        COMMAND, 2, do_pipe)
+	KEYWORD(ubiattach,   COMMAND, 2, do_ubiAttach)
     KEYWORD(write,       COMMAND, 2, do_write)
     KEYWORD(writepid,    OPTION,  0, 0)
 #ifdef __MAKE_KEYWORD_ENUM__

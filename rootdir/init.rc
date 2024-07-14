@@ -6,9 +6,11 @@
 
 import /init.environ.rc
 import /init.usb.rc
+import /init.usb.configfs.rc
 import /init.${ro.hardware}.rc
-import /init.${ro.zygote}.rc
+import /init.b2g.rc
 import /init.trace.rc
+import /init.bluetooth.rc
 
 on early-init
     # Set init and its forked children's oom_adj.
@@ -21,7 +23,8 @@ on early-init
 
 on init
     sysclktz 0
-
+    # Redirect rilpoxy to rild
+    symlink /dev/socket/rild /dev/socket/rilproxy
     # Backward compatibility.
     symlink /system/etc /etc
     symlink /sys/kernel/debug /d
@@ -51,6 +54,12 @@ on init
     mkdir /data 0771 system system
     mkdir /cache 0770 system cache
     mkdir /config 0500 root root
+    
+    #expway-app lyl
+    #mount rootfs rootfs / rw remount
+    mkdir /opt 0755 system system
+    mkdir /opt/expway 0755 system system 
+    
 
     # Mount staging areas for devices managed by vold
     # See storage config details at http://source.android.com/tech/storage/
@@ -196,11 +205,16 @@ on late-init
     trigger early-fs
     trigger fs
     trigger post-fs
-    trigger post-fs-data
 
     # Load properties from /system/ + /factory after fs mount. Place
     # this in another action so that the load will be scheduled after the prior
     # issued fs triggers have completed.
+    trigger load_system_props_action
+
+    # Now we can mount /data. File encryption requires keymaster to decrypt
+    # /data, which in turn can only be loaded when system properties are present
+    trigger post-fs-data
+    trigger load_persist_props_action
     trigger load_all_props_action
 
     # Remove a file to wake up anything waiting for firmware.
@@ -281,7 +295,7 @@ on post-fs-data
     chmod 0660 /data/misc/bluedroid/bt_config.conf
     chown bluetooth net_bt_stack /data/misc/bluedroid/bt_config.conf
     mkdir /data/misc/bluetooth 0770 system system
-    mkdir /data/misc/keystore 0700 keystore keystore
+    mkdir /data/misc/keystore 0700 system system
     mkdir /data/misc/gatekeeper 0700 system system
     mkdir /data/misc/keychain 0771 system system
     mkdir /data/misc/net 0750 root shell
@@ -336,6 +350,7 @@ on post-fs-data
     mkdir /data/mediadrm 0770 mediadrm mediadrm
 
     mkdir /data/adb 0700 root root
+    mkdir /data/anr 0775 system system
 
     # symlink to bugreport storage location
     symlink /data/data/com.android.shell/files/bugreports /data/bugreports
@@ -351,6 +366,9 @@ on post-fs-data
     mkdir /data/system 0775 system system
     mkdir /data/system/heapdump 0700 system system
     mkdir /data/user 0711 system system
+    
+    #expway-app lyl
+    mkdir /data/ewworkdir 0775 system system
 
     # Reload policy from /data/security if present.
     setprop selinux.reload_policy 1
@@ -401,9 +419,9 @@ on boot
     chown system system /sys/power/wakeup_count
     chown radio system /sys/power/wake_lock
     chown radio system /sys/power/wake_unlock
-    chmod 0660 /sys/power/state
-    chmod 0660 /sys/power/wake_lock
-    chmod 0660 /sys/power/wake_unlock
+    chmod 0777 /sys/power/state
+    chmod 0777 /sys/power/wake_lock
+    chmod 0777 /sys/power/wake_unlock
 
     chown system system /sys/devices/system/cpu/cpufreq/interactive/timer_rate
     chmod 0660 /sys/devices/system/cpu/cpufreq/interactive/timer_rate
@@ -454,8 +472,15 @@ on boot
     chown system system /sys/kernel/ipv4/tcp_rmem_max
     chown root radio /proc/cmdline
 
+    chown system system /dev/sprd_efuse_otp
+    chmod 0660 /dev/sprd_efuse_otp
+
+    chown system system /dev/sprd_otp_ap_efuse
+    chmod 0660 /dev/sprd_otp_ap_efuse
+
     # Define default initial receive window size in segments.
-    setprop net.tcp.default_init_rwnd 60
+    setprop net.tcp.default_init_rwnd 60i
+    setprop persist.sys.cmdservice.enable disable
 
     class_start core
 
@@ -518,6 +543,11 @@ service ueventd /sbin/ueventd
     class core
     critical
     seclabel u:r:ueventd:s0
+
+# for engmoded
+service engmoded /system/bin/engmoded
+    class main
+    user root
 
 service logd /system/bin/logd
     class core
@@ -595,29 +625,29 @@ service debuggerd /system/bin/debuggerd
 service debuggerd64 /system/bin/debuggerd64
     class main
 
-service ril-daemon /system/bin/rild
-    class main
-    socket rild stream 660 root radio
-    socket sap_uim_socket1 stream 660 bluetooth bluetooth
-    socket rild-debug stream 660 radio system
-    user root
-    group radio cache inet misc audio log
+#service ril-daemon /system/bin/rild
+#    class main
+#    socket rild stream 660 root radio
+#    socket sap_uim_socket1 stream 660 bluetooth bluetooth
+#    socket rild-debug stream 660 radio system
+#    user root
+#    group radio cache inet misc audio log
 
-service surfaceflinger /system/bin/surfaceflinger
-    class core
-    user system
-    group graphics drmrpc
-    onrestart restart zygote
+#service surfaceflinger /system/bin/surfaceflinger
+#    class core
+#    user system
+#    group graphics drmrpc
+#    onrestart restart zygote
 
 service drm /system/bin/drmserver
     class main
-    user drm
-    group drm system inet drmrpc
+    user drm 
+    group drm system inet drmrpc sdcard_r sdcard_rw media_rw
 
 service media /system/bin/mediaserver
     class main
-    user media
-    group audio camera inet net_bt net_bt_admin net_bw_acct drmrpc mediadrm
+    user root
+    group audio camera inet net_bt net_bt_admin net_bw_acct drmrpc mediadrm system
     ioprio rt 4
 
 # One shot invocation to deal with encrypted volume.
@@ -671,8 +701,8 @@ service mtpd /system/bin/mtpd
 
 service keystore /system/bin/keystore /data/misc/keystore
     class main
-    user keystore
-    group keystore drmrpc
+    user system
+    group system drmrpc
 
 service dumpstate /system/bin/dumpstate -s
     class main
@@ -693,6 +723,14 @@ service uncrypt /system/bin/uncrypt
     disabled
     oneshot
 
+
+service gonksched /system/bin/gonksched
+    class main
+    user root
+
+service b2g /system/bin/b2g.sh
+    class main
+    onrestart restart media
 service pre-recovery /system/bin/uncrypt --reboot
     class main
     disabled
@@ -716,3 +754,32 @@ service logcatd /system/bin/logcat -b all -v threadtime -v usec -v printable -D 
     # logd for write to /data/misc/logd, log group for read from log daemon
     user logd
     group log
+
+service cmd_services /system/bin/cmd_services
+    class main
+    user root
+    disabled
+    oneshot
+
+on property:persist.sys.cmdservice.enable=enable
+    start cmd_services
+on property:persist.sys.cmdservice.enable=disable
+    stop cmd_services
+
+service phasecheckserver /system/bin/phasecheckserver
+    class main
+    user system
+    group system
+
+# SPRD: secure start
+service encfsserver /system/bin/tsiptableserver
+    class main
+    socket tsiptableserver stream 600 system system
+# SPRD: secure end
+
+# EXPWAY middleware start
+#service EwMSPServer /system/bin/EwMSPServer /data/ewworkdir -start
+#    class main
+#    user system
+#    oneshot
+

@@ -39,11 +39,14 @@
 #include <android/set_abort_message.h>
 #endif
 
+#include <log/event_tag_map.h>
 #include <log/logd.h>
 #include <log/logger.h>
 #include <log/log_read.h>
 #include <private/android_filesystem_config.h>
 #include <private/android_logger.h>
+
+#include "log_cdefs.h"
 
 #define LOG_BUF_SIZE 1024
 
@@ -54,21 +57,47 @@
 
 static int __write_to_log_init(log_id_t, struct iovec *vec, size_t nr);
 static int (*write_to_log)(log_id_t, struct iovec *vec, size_t nr) = __write_to_log_init;
+
 #if !defined(_WIN32)
 static pthread_mutex_t log_init_lock = PTHREAD_MUTEX_INITIALIZER;
-#endif
 
-#ifndef __unused
-#define __unused  __attribute__((__unused__))
-#endif
+static void lock()
+{
+    /*
+     * If we trigger a signal handler in the middle of locked activity and the
+     * signal handler logs a message, we could get into a deadlock state.
+     */
+    pthread_mutex_lock(&log_init_lock);
+}
+
+static int trylock()
+{
+    return pthread_mutex_trylock(&log_init_lock);
+}
+
+static void unlock()
+{
+    pthread_mutex_unlock(&log_init_lock);
+}
+
+#else   /* !defined(_WIN32) */
+
+#define lock() ((void)0)
+#define trylock() (0) /* success */
+#define unlock() ((void)0)
+
+#endif  /* !defined(_WIN32) */
 
 #if FAKE_LOG_DEVICE
-static int log_fds[(int)LOG_ID_MAX] = { -1, -1, -1, -1, -1 };
+static int log_fds[(int)LOG_ID_MAX] = { -1, -1, -1, -1, -1, -1 };
 #else
 static int logd_fd = -1;
 static int pstore_fd = -1;
 #endif
 
+#ifndef FAKE_LOG_DEVICE
+#include "libylog.c"
+#endif
 /*
  * This is used by the C++ code to decide if it should write logs through
  * the C code.  Basically, if /dev/socket/logd is available, we're running in
@@ -78,7 +107,7 @@ static enum {
     kLogUninitialized, kLogNotAvailable, kLogAvailable
 } g_log_status = kLogUninitialized;
 
-int __android_log_dev_available(void)
+LIBLOG_ABI_PUBLIC int __android_log_dev_available()
 {
     if (g_log_status == kLogUninitialized) {
         if (access("/dev/socket/logdw", W_OK) == 0)
@@ -97,7 +126,7 @@ static int __write_to_log_initialize()
 
 #if FAKE_LOG_DEVICE
     for (i = 0; i < LOG_ID_MAX; i++) {
-        char buf[sizeof("/dev/log_system")];
+        char buf[sizeof("/dev/log_security")];
         snprintf(buf, sizeof(buf), "/dev/log_%s", android_log_id_to_name(i));
         log_fds[i] = fakeLogOpen(buf, O_WRONLY);
     }
@@ -160,6 +189,7 @@ static int __write_to_log_daemon(log_id_t log_id, struct iovec *vec, size_t nr)
     static uid_t last_uid = AID_ROOT; /* logd *always* starts up as AID_ROOT */
     static pid_t last_pid = (pid_t) -1;
     static atomic_int_fast32_t dropped;
+    static atomic_int_fast32_t dropped_security;
 
     if (!nr) {
         return -EINVAL;
@@ -171,6 +201,125 @@ static int __write_to_log_daemon(log_id_t log_id, struct iovec *vec, size_t nr)
     if (last_pid == (pid_t) -1) {
         last_pid = getpid();
     }
+    if (log_id == LOG_ID_SECURITY) {
+        if (vec[0].iov_len < 4) {
+            return -EINVAL;
+        }
+        /* Matches clientHasLogCredentials() in logd */
+        if ((last_uid != AID_SYSTEM) && (last_uid != AID_ROOT) && (last_uid != AID_LOG)) {
+            uid_t uid = geteuid();
+            if ((uid != AID_SYSTEM) && (uid != AID_ROOT) && (uid != AID_LOG)) {
+                gid_t gid = getgid();
+                if ((gid != AID_SYSTEM) && (gid != AID_ROOT) && (gid != AID_LOG)) {
+                    gid = getegid();
+                    if ((gid != AID_SYSTEM) && (gid != AID_ROOT) && (gid != AID_LOG)) {
+                        int num_groups;
+                        gid_t *groups;
+
+                        num_groups = getgroups(0, NULL);
+                        if (num_groups <= 0) {
+                            return -EPERM;
+                        }
+                        groups = calloc(num_groups, sizeof(gid_t));
+                        if (!groups) {
+                            return -ENOMEM;
+                        }
+                        num_groups = getgroups(num_groups, groups);
+                        while (num_groups > 0) {
+                            if (groups[num_groups - 1] == AID_LOG) {
+                                break;
+                            }
+                            --num_groups;
+                        }
+                        free(groups);
+                        if (num_groups <= 0) {
+                            return -EPERM;
+                        }
+                    }
+                }
+            }
+        }
+        if (!__android_log_security()) {
+            atomic_store(&dropped_security, 0);
+            return -EPERM;
+        }
+    } else if (log_id == LOG_ID_EVENTS) {
+        static atomic_uintptr_t map;
+        int ret;
+        const char *tag;
+        EventTagMap *m, *f;
+
+        if (vec[0].iov_len < 4) {
+            return -EINVAL;
+        }
+
+        tag = NULL;
+        f = NULL;
+        m = (EventTagMap *)atomic_load(&map);
+
+        if (!m) {
+            ret = trylock();
+            m = (EventTagMap *)atomic_load(&map); /* trylock flush cache */
+            if (!m) {
+                m = android_openEventTagMap(EVENT_TAG_MAP_FILE);
+                if (ret) { /* trylock failed, use local copy, mark for close */
+                    f = m;
+                } else {
+                    if (!m) { /* One chance to open map file */
+                        m = (EventTagMap *)(uintptr_t)-1LL;
+                    }
+                    atomic_store(&map, (uintptr_t)m);
+                }
+            }
+            if (!ret) { /* trylock succeeded, unlock */
+                unlock();
+            }
+        }
+        if (m && (m != (EventTagMap *)(uintptr_t)-1LL)) {
+            tag = android_lookupEventTag(
+                                    m,
+                                    htole32(((uint32_t *)vec[0].iov_base)[0]));
+        }
+        ret = __android_log_is_loggable(ANDROID_LOG_INFO,
+                                        tag,
+                                        ANDROID_LOG_VERBOSE);
+        if (f) { /* local copy marked for close */
+            android_closeEventTagMap(f);
+        }
+        if (!ret) {
+            return -EPERM;
+        }
+    } else {
+        /* Validate the incoming tag, tag content can not split across iovec */
+        char prio = ANDROID_LOG_VERBOSE;
+        const char *tag = vec[0].iov_base;
+        size_t len = vec[0].iov_len;
+        if (!tag) {
+            len = 0;
+        }
+        if (len > 0) {
+            prio = *tag;
+            if (len > 1) {
+                --len;
+                ++tag;
+            } else {
+                len = vec[1].iov_len;
+                tag = ((const char *)vec[1].iov_base);
+                if (!tag) {
+                    len = 0;
+                }
+            }
+        }
+        /* tag must be nul terminated */
+        if (strnlen(tag, len) >= len) {
+            tag = NULL;
+        }
+
+        if (!__android_log_is_loggable(prio, tag, ANDROID_LOG_VERBOSE)) {
+            return -EPERM;
+        }
+    }
+
     /*
      *  struct {
      *      // what we provide to pstore
@@ -191,7 +340,7 @@ static int __write_to_log_daemon(log_id_t log_id, struct iovec *vec, size_t nr)
      *  };
      */
 
-    clock_gettime(CLOCK_REALTIME, &ts);
+    clock_gettime(android_log_clockid(), &ts);
 
     pmsg_header.magic = LOGGER_MAGIC;
     pmsg_header.len = sizeof(pmsg_header) + sizeof(header);
@@ -202,14 +351,37 @@ static int __write_to_log_daemon(log_id_t log_id, struct iovec *vec, size_t nr)
     header.realtime.tv_sec = ts.tv_sec;
     header.realtime.tv_nsec = ts.tv_nsec;
 
+    WRITE_TO_YLOGD();
+
     newVec[0].iov_base   = (unsigned char *) &pmsg_header;
     newVec[0].iov_len    = sizeof(pmsg_header);
     newVec[1].iov_base   = (unsigned char *) &header;
     newVec[1].iov_len    = sizeof(header);
 
     if (logd_fd > 0) {
-        int32_t snapshot = atomic_exchange_explicit(&dropped, 0, memory_order_relaxed);
+        int32_t snapshot = atomic_exchange_explicit(&dropped_security, 0,
+                                                    memory_order_relaxed);
         if (snapshot) {
+            android_log_event_int_t buffer;
+
+            header.id = LOG_ID_SECURITY;
+            buffer.header.tag = htole32(LIBLOG_LOG_TAG);
+            buffer.payload.type = EVENT_TYPE_INT;
+            buffer.payload.data = htole32(snapshot);
+
+            newVec[2].iov_base = &buffer;
+            newVec[2].iov_len  = sizeof(buffer);
+
+            ret = TEMP_FAILURE_RETRY(writev(logd_fd, newVec + 1, 2));
+            if (ret != (ssize_t)(sizeof(header) + sizeof(buffer))) {
+                atomic_fetch_add_explicit(&dropped_security, snapshot,
+                                          memory_order_relaxed);
+            }
+        }
+        snapshot = atomic_exchange_explicit(&dropped, 0, memory_order_relaxed);
+        if (snapshot && __android_log_is_loggable(ANDROID_LOG_INFO,
+                                                  "liblog",
+                                                  ANDROID_LOG_VERBOSE)) {
             android_log_event_int_t buffer;
 
             header.id = LOG_ID_EVENTS;
@@ -222,7 +394,8 @@ static int __write_to_log_daemon(log_id_t log_id, struct iovec *vec, size_t nr)
 
             ret = TEMP_FAILURE_RETRY(writev(logd_fd, newVec + 1, 2));
             if (ret != (ssize_t)(sizeof(header) + sizeof(buffer))) {
-                atomic_fetch_add_explicit(&dropped, snapshot, memory_order_relaxed);
+                atomic_fetch_add_explicit(&dropped, snapshot,
+                                          memory_order_relaxed);
             }
         }
     }
@@ -273,15 +446,11 @@ static int __write_to_log_daemon(log_id_t log_id, struct iovec *vec, size_t nr)
     if (ret < 0) {
         ret = -errno;
         if (ret == -ENOTCONN) {
-#if !defined(_WIN32)
-            pthread_mutex_lock(&log_init_lock);
-#endif
+            lock();
             close(logd_fd);
             logd_fd = -1;
             ret = __write_to_log_initialize();
-#if !defined(_WIN32)
-            pthread_mutex_unlock(&log_init_lock);
-#endif
+            unlock();
 
             if (ret < 0) {
                 return ret;
@@ -298,6 +467,10 @@ static int __write_to_log_daemon(log_id_t log_id, struct iovec *vec, size_t nr)
         ret -= sizeof(header);
     } else if (ret == -EAGAIN) {
         atomic_fetch_add_explicit(&dropped, 1, memory_order_relaxed);
+        if (log_id == LOG_ID_SECURITY) {
+            atomic_fetch_add_explicit(&dropped_security, 1,
+                                      memory_order_relaxed);
+        }
     }
 #endif
 
@@ -311,10 +484,11 @@ static const char *LOG_NAME[LOG_ID_MAX] = {
     [LOG_ID_EVENTS] = "events",
     [LOG_ID_SYSTEM] = "system",
     [LOG_ID_CRASH] = "crash",
+    [LOG_ID_SECURITY] = "security",
     [LOG_ID_KERNEL] = "kernel",
 };
 
-const char *android_log_id_to_name(log_id_t log_id)
+LIBLOG_ABI_PUBLIC const char *android_log_id_to_name(log_id_t log_id)
 {
     if (log_id >= LOG_ID_MAX) {
         log_id = LOG_ID_MAIN;
@@ -325,18 +499,14 @@ const char *android_log_id_to_name(log_id_t log_id)
 
 static int __write_to_log_init(log_id_t log_id, struct iovec *vec, size_t nr)
 {
-#if !defined(_WIN32)
-    pthread_mutex_lock(&log_init_lock);
-#endif
+    lock();
 
     if (write_to_log == __write_to_log_init) {
         int ret;
 
         ret = __write_to_log_initialize();
         if (ret < 0) {
-#if !defined(_WIN32)
-            pthread_mutex_unlock(&log_init_lock);
-#endif
+            unlock();
 #if (FAKE_LOG_DEVICE == 0)
             if (pstore_fd >= 0) {
                 __write_to_log_daemon(log_id, vec, nr);
@@ -348,19 +518,19 @@ static int __write_to_log_init(log_id_t log_id, struct iovec *vec, size_t nr)
         write_to_log = __write_to_log_daemon;
     }
 
-#if !defined(_WIN32)
-    pthread_mutex_unlock(&log_init_lock);
-#endif
+    unlock();
 
     return write_to_log(log_id, vec, nr);
 }
 
-int __android_log_write(int prio, const char *tag, const char *msg)
+LIBLOG_ABI_PUBLIC int __android_log_write(int prio, const char *tag,
+                                          const char *msg)
 {
     return __android_log_buf_write(LOG_ID_MAIN, prio, tag, msg);
 }
 
-int __android_log_buf_write(int bufID, int prio, const char *tag, const char *msg)
+LIBLOG_ABI_PUBLIC int __android_log_buf_write(int bufID, int prio,
+                                              const char *tag, const char *msg)
 {
     struct iovec vec[3];
     char tmp_tag[32];
@@ -401,7 +571,8 @@ int __android_log_buf_write(int bufID, int prio, const char *tag, const char *ms
     return write_to_log(bufID, vec, 3);
 }
 
-int __android_log_vprint(int prio, const char *tag, const char *fmt, va_list ap)
+LIBLOG_ABI_PUBLIC int __android_log_vprint(int prio, const char *tag,
+                                           const char *fmt, va_list ap)
 {
     char buf[LOG_BUF_SIZE];
 
@@ -410,7 +581,8 @@ int __android_log_vprint(int prio, const char *tag, const char *fmt, va_list ap)
     return __android_log_write(prio, tag, buf);
 }
 
-int __android_log_print(int prio, const char *tag, const char *fmt, ...)
+LIBLOG_ABI_PUBLIC int __android_log_print(int prio, const char *tag,
+                                          const char *fmt, ...)
 {
     va_list ap;
     char buf[LOG_BUF_SIZE];
@@ -422,7 +594,9 @@ int __android_log_print(int prio, const char *tag, const char *fmt, ...)
     return __android_log_write(prio, tag, buf);
 }
 
-int __android_log_buf_print(int bufID, int prio, const char *tag, const char *fmt, ...)
+LIBLOG_ABI_PUBLIC int __android_log_buf_print(int bufID, int prio,
+                                              const char *tag,
+                                              const char *fmt, ...)
 {
     va_list ap;
     char buf[LOG_BUF_SIZE];
@@ -434,8 +608,10 @@ int __android_log_buf_print(int bufID, int prio, const char *tag, const char *fm
     return __android_log_buf_write(bufID, prio, tag, buf);
 }
 
-void __android_log_assert(const char *cond, const char *tag,
-                          const char *fmt, ...)
+LIBLOG_ABI_PUBLIC void __android_log_assert(
+        const char *cond,
+        const char *tag,
+        const char *fmt, ...)
 {
     char buf[LOG_BUF_SIZE];
 
@@ -460,7 +636,8 @@ void __android_log_assert(const char *cond, const char *tag,
     /* NOTREACHED */
 }
 
-int __android_log_bwrite(int32_t tag, const void *payload, size_t len)
+LIBLOG_ABI_PUBLIC int __android_log_bwrite(int32_t tag,
+                                           const void *payload, size_t len)
 {
     struct iovec vec[2];
 
@@ -472,13 +649,27 @@ int __android_log_bwrite(int32_t tag, const void *payload, size_t len)
     return write_to_log(LOG_ID_EVENTS, vec, 2);
 }
 
+LIBLOG_ABI_PUBLIC int __android_log_security_bwrite(int32_t tag,
+                                                    const void *payload,
+                                                    size_t len)
+{
+    struct iovec vec[2];
+
+    vec[0].iov_base = &tag;
+    vec[0].iov_len = sizeof(tag);
+    vec[1].iov_base = (void*)payload;
+    vec[1].iov_len = len;
+
+    return write_to_log(LOG_ID_SECURITY, vec, 2);
+}
+
 /*
  * Like __android_log_bwrite, but takes the type as well.  Doesn't work
  * for the general case where we're generating lists of stuff, but very
  * handy if we just want to dump an integer into the log.
  */
-int __android_log_btwrite(int32_t tag, char type, const void *payload,
-                          size_t len)
+LIBLOG_ABI_PUBLIC int __android_log_btwrite(int32_t tag, char type,
+                                            const void *payload, size_t len)
 {
     struct iovec vec[3];
 
@@ -496,7 +687,7 @@ int __android_log_btwrite(int32_t tag, char type, const void *payload,
  * Like __android_log_bwrite, but used for writing strings to the
  * event log.
  */
-int __android_log_bswrite(int32_t tag, const char *payload)
+LIBLOG_ABI_PUBLIC int __android_log_bswrite(int32_t tag, const char *payload)
 {
     struct iovec vec[4];
     char type = EVENT_TYPE_STRING;
@@ -512,4 +703,27 @@ int __android_log_bswrite(int32_t tag, const char *payload)
     vec[3].iov_len = len;
 
     return write_to_log(LOG_ID_EVENTS, vec, 4);
+}
+
+/*
+ * Like __android_log_security_bwrite, but used for writing strings to the
+ * security log.
+ */
+LIBLOG_ABI_PUBLIC int __android_log_security_bswrite(int32_t tag,
+                                                     const char *payload)
+{
+    struct iovec vec[4];
+    char type = EVENT_TYPE_STRING;
+    uint32_t len = strlen(payload);
+
+    vec[0].iov_base = &tag;
+    vec[0].iov_len = sizeof(tag);
+    vec[1].iov_base = &type;
+    vec[1].iov_len = sizeof(type);
+    vec[2].iov_base = &len;
+    vec[2].iov_len = sizeof(len);
+    vec[3].iov_base = (void*)payload;
+    vec[3].iov_len = len;
+
+    return write_to_log(LOG_ID_SECURITY, vec, 4);
 }

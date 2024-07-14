@@ -37,6 +37,7 @@ LOCAL_SHARED_LIBRARIES := \
     libcutils \
     liblog \
     libselinux \
+    libutils
 
 LOCAL_CLANG := true
 

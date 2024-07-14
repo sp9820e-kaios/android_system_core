@@ -179,6 +179,178 @@ status_t BnFingerprintDaemon::onTransact(uint32_t code, const Parcel& data, Parc
             reply->writeNoException();
             return NO_ERROR;
         }
+        // Add by silead begin
+        case SET_SCREEN_STATUS: {
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            const int32_t screen_status = data.readInt32();
+            int32_t ret = setFPScreenStatus(screen_status);
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case SET_FP_ENABLE_CREDENTIAL: {
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            const int32_t index = data.readInt32();
+            const int32_t enable = data.readInt32();
+            int32_t ret = setFPEnableCredential(index, enable);
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case GET_FP_ENABLE_CREDENTIAL:{
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            const int32_t index = data.readInt32();
+            int32_t ret = getFPEnableCredential(index);
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case GET_FP_VIRTUAL_KEYCODE:{
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            int32_t ret = getFPVirtualKeyCode();
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case SET_FP_VIRTUAL_KEYCODE:{
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            const int32_t scanCode = data.readInt32();
+            int32_t ret = setFPVirtualKeyCode(scanCode);
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case GET_FP_LONG_PRESS_VIRTUAL_KEYCODE:{
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            int32_t ret = getFPLongPressVirtualKeyCode();
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case SET_FP_LONG_PRESS_VIRTUAL_KEYCODE:{
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            const int32_t scanCode = data.readInt32();
+            int32_t ret = setFPLongPressVirtualKeyCode(scanCode);
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case GET_FP_DOUBLE_CLICK_VIRTUAL_KEYCODE:{
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            int32_t ret = getFPDouClickVirtualKeyCode();
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case SET_FP_DOUBLE_CLICK_VIRTUAL_KEYCODE:{
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            const int32_t scanCode = data.readInt32();
+            int32_t ret = setFPDouClickVirtualKeyCode(scanCode);
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case GET_FP_VIRTUAL_KEY_STATE:{
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            int32_t ret = getFPVirtualKeyState();
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case SET_FP_VIRTUAL_KEY_STATE:{
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            const int32_t virtualState = data.readInt32();
+            int32_t ret = setFPVirtualKeyState(virtualState);
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case GET_FP_WAKEUP_STATE:{
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            int32_t ret = getFPWakeUpState();
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case SET_FP_WAKEUP_STATE:{
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            const int32_t wakeupState = data.readInt32();
+            int32_t ret = setFPWakeUpState(wakeupState);
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+       case GET_FINGERPRINT_STATE:{
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            int32_t ret = getFingerPrintState();
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case SET_FINGERPRINT_STATE:{
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            const int32_t fingerprintState = data.readInt32();
+            int32_t ret = setFingerPrintState(fingerprintState);
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case SET_FP_POWER_FUNCTION_KEY_STATE:{
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            const int32_t powerFunctionKeyState = data.readInt32();
+            int32_t ret = setFPPowerFuncKeyState(powerFunctionKeyState);
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case GET_FP_POWER_FUNCTION_KEY_STATE:{
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            int32_t ret = getFPPowerFuncKeyState();
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case SET_FP_IDLE_FUNCTION_KEY_STATE:{
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            const int32_t idleFunctionKeyState = data.readInt32();
+            int32_t ret = setFPIdleFuncKeyState(idleFunctionKeyState);
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case GET_FP_IDLE_FUNCTION_KEY_STATE:{
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            int32_t ret = getFPIdleFuncKeyState();
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case SET_FP_WHOLE_FUNCTION_KEY_STATE:{
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            const int32_t wholeFunctionKeyState = data.readInt32();
+            int32_t ret = setFPWholeFuncKeyState(wholeFunctionKeyState);
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case SET_FP_FUNCTION_KEY_STATE: {
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            const int32_t index = data.readInt32();
+            const int32_t enable = data.readInt32();
+            int32_t ret = setFPFunctionKeyState(index, enable);
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        case GET_FP_FUNCTION_KEY_STATE: {
+            CHECK_INTERFACE(IFingerprintDaemon, data, reply);
+            const int32_t index = data.readInt32();
+            int32_t ret = getFPFunctionKeyState(index);
+            reply->writeNoException();
+            reply->writeInt32(ret);
+            return NO_ERROR;
+        }
+        // Add by silead end
         default:
             return BBinder::onTransact(code, data, reply, flags);
     }

@@ -56,6 +56,12 @@
 #include "log.h"
 
 #define PERSISTENT_PROPERTY_DIR  "/data/property"
+#define PROP_PATH_OEM_CHANGED "/productinfo/custom.prop"
+#define PROP_PATH_OEM_OPERATOR "/productinfo/custom_operator.prop"
+#define PROP_PATH_OEM_AREA "/productinfo/custom_area.prop"
+#define PROP_PATH_OEM_BOOTANIM "/productinfo/bootanim.prop"
+#define PROP_PATH_OEM_BOOTSOUND "/productinfo/bootsound.prop"
+#define PROP_PATH_OEM_WALLPAPER "/productinfo/wallpaper.prop"
 #define FSTAB_PREFIX "/fstab."
 #define RECOVERY_MOUNT_POINT "/recovery"
 
@@ -560,7 +566,32 @@ void load_recovery_id_prop() {
     close(fd);
 }
 
+void load_oem_ro_props()
+{
+    load_properties_from_file(PROP_PATH_OEM_OPERATOR, NULL);
+    load_properties_from_file(PROP_PATH_OEM_CHANGED, NULL);
+    load_properties_from_file(PROP_PATH_OEM_AREA, NULL);
+    load_properties_from_file(PROP_PATH_OEM_WALLPAPER, NULL);
+}
+
+void reload_oem_persist_props() {
+    char reload_oem[PROP_VALUE_MAX];
+    int ret;
+    ret = property_get("persist.sys.reload_oem", reload_oem);
+    if (ret == 0 || (ret && (strcmp(reload_oem, "1") == 0))) {
+        load_properties_from_file(PROP_PATH_OEM_CHANGED, NULL);
+        load_properties_from_file(PROP_PATH_OEM_OPERATOR, NULL);
+        load_properties_from_file(PROP_PATH_OEM_AREA, NULL);
+        load_properties_from_file(PROP_PATH_OEM_BOOTANIM, NULL);
+        load_properties_from_file(PROP_PATH_OEM_BOOTSOUND, NULL);
+        load_properties_from_file(PROP_PATH_OEM_WALLPAPER, NULL);
+        property_set("persist.sys.reload_oem", "0");
+    }
+}
+
+
 void load_all_props() {
+    load_oem_ro_props();
     load_properties_from_file(PROP_PATH_SYSTEM_BUILD, NULL);
     load_properties_from_file(PROP_PATH_VENDOR_BUILD, NULL);
     load_properties_from_file(PROP_PATH_FACTORY, "ro.*");
@@ -571,6 +602,7 @@ void load_all_props() {
     load_persistent_properties();
 
     load_recovery_id_prop();
+    reload_oem_persist_props();
 }
 
 void start_property_service() {

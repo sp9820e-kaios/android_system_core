@@ -24,7 +24,6 @@
 #define NOMINMAX /* for windows to suppress definition of min in stdlib.h */
 #include <stdlib.h>
 #include <string.h>
-#include <sys/cdefs.h>
 #include <unistd.h>
 
 #include <cutils/list.h>
@@ -34,29 +33,22 @@
 #include <private/android_filesystem_config.h>
 #include <private/android_logger.h>
 
+#include "log_cdefs.h"
+
 /* branchless on many architectures. */
 #define min(x,y) ((y) ^ (((x) ^ (y)) & -((x) < (y))))
 
-#if (defined(USE_MINGW) || defined(HAVE_WINSOCK))
-#define WEAK static
-#else
-#define WEAK __attribute__((weak))
-#endif
-#ifndef __unused
-#define __unused __attribute__((unused))
-#endif
-
 /* Private copy of ../libcutils/socket_local_client.c prevent library loops */
 
-#ifdef HAVE_WINSOCK
+#if defined(_WIN32)
 
-int WEAK socket_local_client(const char *name, int namespaceId, int type)
+LIBLOG_WEAK int socket_local_client(const char *name, int namespaceId, int type)
 {
     errno = ENOSYS;
     return -ENOSYS;
 }
 
-#else /* !HAVE_WINSOCK */
+#else /* !_WIN32 */
 
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -71,8 +63,9 @@ int WEAK socket_local_client(const char *name, int namespaceId, int type)
 #define LISTEN_BACKLOG 4
 
 /* Documented in header file. */
-int WEAK socket_make_sockaddr_un(const char *name, int namespaceId,
-                                 struct sockaddr_un *p_addr, socklen_t *alen)
+LIBLOG_WEAK int socket_make_sockaddr_un(const char *name, int namespaceId,
+                                        struct sockaddr_un *p_addr,
+                                        socklen_t *alen)
 {
     memset (p_addr, 0, sizeof (*p_addr));
     size_t namelen;
@@ -151,8 +144,8 @@ error:
  *
  * Used by AndroidSocketImpl
  */
-int WEAK socket_local_client_connect(int fd, const char *name, int namespaceId,
-                                     int type __unused)
+LIBLOG_WEAK int socket_local_client_connect(int fd, const char *name,
+                                            int namespaceId, int type __unused)
 {
     struct sockaddr_un addr;
     socklen_t alen;
@@ -178,7 +171,7 @@ error:
  * connect to peer named "name"
  * returns fd or -1 on error
  */
-int WEAK socket_local_client(const char *name, int namespaceId, int type)
+LIBLOG_WEAK int socket_local_client(const char *name, int namespaceId, int type)
 {
     int s;
 
@@ -193,7 +186,7 @@ int WEAK socket_local_client(const char *name, int namespaceId, int type)
     return s;
 }
 
-#endif /* !HAVE_WINSOCK */
+#endif /* !_WIN32 */
 /* End of ../libcutils/socket_local_client.c */
 
 #define logger_for_each(logger, logger_list) \
@@ -208,10 +201,11 @@ static const char *LOG_NAME[LOG_ID_MAX] = {
     [LOG_ID_EVENTS] = "events",
     [LOG_ID_SYSTEM] = "system",
     [LOG_ID_CRASH] = "crash",
+    [LOG_ID_SECURITY] = "security",
     [LOG_ID_KERNEL] = "kernel",
 };
 
-const char *android_log_id_to_name(log_id_t log_id)
+LIBLOG_ABI_PUBLIC const char *android_log_id_to_name(log_id_t log_id)
 {
     if (log_id >= LOG_ID_MAX) {
         log_id = LOG_ID_MAIN;
@@ -219,7 +213,7 @@ const char *android_log_id_to_name(log_id_t log_id)
     return LOG_NAME[log_id];
 }
 
-log_id_t android_name_to_log_id(const char *logName)
+LIBLOG_ABI_PUBLIC log_id_t android_name_to_log_id(const char *logName)
 {
     const char *b;
     int ret;
@@ -274,7 +268,7 @@ static void android_logger_free(struct logger *logger)
 /* android_logger_alloc unimplemented, no use case */
 
 /* method for getting the associated sublog id */
-log_id_t android_logger_get_id(struct logger *logger)
+LIBLOG_ABI_PUBLIC log_id_t android_logger_get_id(struct logger *logger)
 {
     return logger->id;
 }
@@ -408,7 +402,7 @@ static uid_t get_best_effective_uid()
     return last_uid = uid;
 }
 
-int android_logger_clear(struct logger *logger)
+LIBLOG_ABI_PUBLIC int android_logger_clear(struct logger *logger)
 {
     char buf[512];
 
@@ -424,7 +418,7 @@ int android_logger_clear(struct logger *logger)
 }
 
 /* returns the total size of the log's ring buffer */
-long android_logger_get_log_size(struct logger *logger)
+LIBLOG_ABI_PUBLIC long android_logger_get_log_size(struct logger *logger)
 {
     char buf[512];
 
@@ -440,7 +434,8 @@ long android_logger_get_log_size(struct logger *logger)
     return atol(buf);
 }
 
-int android_logger_set_log_size(struct logger *logger, unsigned long size)
+LIBLOG_ABI_PUBLIC int android_logger_set_log_size(struct logger *logger,
+                                                  unsigned long size)
 {
     char buf[512];
 
@@ -454,7 +449,8 @@ int android_logger_set_log_size(struct logger *logger, unsigned long size)
  * returns the readable size of the log's ring buffer (that is, amount of the
  * log consumed)
  */
-long android_logger_get_log_readable_size(struct logger *logger)
+LIBLOG_ABI_PUBLIC long android_logger_get_log_readable_size(
+        struct logger *logger)
 {
     char buf[512];
 
@@ -473,16 +469,18 @@ long android_logger_get_log_readable_size(struct logger *logger)
 /*
  * returns the logger version
  */
-int android_logger_get_log_version(struct logger *logger __unused)
+LIBLOG_ABI_PUBLIC int android_logger_get_log_version(
+        struct logger *logger __unused)
 {
-    return 3;
+    return 4;
 }
 
 /*
  * returns statistics
  */
-ssize_t android_logger_get_statistics(struct logger_list *logger_list,
-                                      char *buf, size_t len)
+LIBLOG_ABI_PUBLIC ssize_t android_logger_get_statistics(
+        struct logger_list *logger_list,
+        char *buf, size_t len)
 {
     struct logger *logger;
     char *cp = buf;
@@ -500,17 +498,24 @@ ssize_t android_logger_get_statistics(struct logger_list *logger_list,
         remaining -= n;
         cp += n;
     }
+
+    if (logger_list->pid) {
+        snprintf(cp, remaining, " pid=%u", logger_list->pid);
+    }
+
     return send_log_msg(NULL, NULL, buf, len);
 }
 
-ssize_t android_logger_get_prune_list(struct logger_list *logger_list __unused,
-                                      char *buf, size_t len)
+LIBLOG_ABI_PUBLIC ssize_t android_logger_get_prune_list(
+        struct logger_list *logger_list __unused,
+        char *buf, size_t len)
 {
     return send_log_msg(NULL, "getPruneList", buf, len);
 }
 
-int android_logger_set_prune_list(struct logger_list *logger_list __unused,
-                                  char *buf, size_t len)
+LIBLOG_ABI_PUBLIC int android_logger_set_prune_list(
+        struct logger_list *logger_list __unused,
+        char *buf, size_t len)
 {
     const char cmd[] = "setPruneList ";
     const size_t cmdlen = sizeof(cmd) - 1;
@@ -525,9 +530,10 @@ int android_logger_set_prune_list(struct logger_list *logger_list __unused,
     return check_log_success(buf, send_log_msg(NULL, NULL, buf, len));
 }
 
-struct logger_list *android_logger_list_alloc(int mode,
-                                              unsigned int tail,
-                                              pid_t pid)
+LIBLOG_ABI_PUBLIC struct logger_list *android_logger_list_alloc(
+        int mode,
+        unsigned int tail,
+        pid_t pid)
 {
     struct logger_list *logger_list;
 
@@ -547,9 +553,10 @@ struct logger_list *android_logger_list_alloc(int mode,
     return logger_list;
 }
 
-struct logger_list *android_logger_list_alloc_time(int mode,
-                                                   log_time start,
-                                                   pid_t pid)
+LIBLOG_ABI_PUBLIC struct logger_list *android_logger_list_alloc_time(
+        int mode,
+        log_time start,
+        pid_t pid)
 {
     struct logger_list *logger_list;
 
@@ -572,8 +579,9 @@ struct logger_list *android_logger_list_alloc_time(int mode,
 /* android_logger_list_unregister unimplemented, no use case */
 
 /* Open the named log and add it to the logger list */
-struct logger *android_logger_open(struct logger_list *logger_list,
-                                   log_id_t id)
+LIBLOG_ABI_PUBLIC struct logger *android_logger_open(
+        struct logger_list *logger_list,
+        log_id_t id)
 {
     struct logger *logger;
 
@@ -604,10 +612,11 @@ ok:
 }
 
 /* Open the single named log and make it part of a new logger list */
-struct logger_list *android_logger_list_open(log_id_t id,
-                                             int mode,
-                                             unsigned int tail,
-                                             pid_t pid)
+LIBLOG_ABI_PUBLIC struct logger_list *android_logger_list_open(
+        log_id_t id,
+        int mode,
+        unsigned int tail,
+        pid_t pid)
 {
     struct logger_list *logger_list = android_logger_list_alloc(mode, tail, pid);
     if (!logger_list) {
@@ -634,6 +643,7 @@ static int android_logger_list_read_pstore(struct logger_list *logger_list,
         android_log_header_t l;
     } buf;
     static uint8_t preread_count;
+    bool is_system;
 
     memset(log_msg, 0, sizeof(*log_msg));
 
@@ -647,7 +657,6 @@ static int android_logger_list_read_pstore(struct logger_list *logger_list,
         preread_count = 0;
     }
 
-    ret = 0;
     while(1) {
         if (preread_count < sizeof(buf)) {
             ret = TEMP_FAILURE_RETRY(read(logger_list->sock,
@@ -690,12 +699,15 @@ static int android_logger_list_read_pstore(struct logger_list *logger_list,
             }
 
             uid = get_best_effective_uid();
-            if (!uid_has_log_permission(uid) && (uid != buf.p.uid)) {
+            is_system = uid_has_log_permission(uid);
+            if (!is_system && (uid != buf.p.uid)) {
                 break;
             }
 
             ret = TEMP_FAILURE_RETRY(read(logger_list->sock,
-                                          log_msg->entry_v3.msg,
+                                          is_system ?
+                                              log_msg->entry_v4.msg :
+                                              log_msg->entry_v3.msg,
                                           buf.p.len - sizeof(buf)));
             if (ret < 0) {
                 return -errno;
@@ -704,13 +716,18 @@ static int android_logger_list_read_pstore(struct logger_list *logger_list,
                 return -EIO;
             }
 
-            log_msg->entry_v3.len = buf.p.len - sizeof(buf);
-            log_msg->entry_v3.hdr_size = sizeof(log_msg->entry_v3);
-            log_msg->entry_v3.pid = buf.p.pid;
-            log_msg->entry_v3.tid = buf.l.tid;
-            log_msg->entry_v3.sec = buf.l.realtime.tv_sec;
-            log_msg->entry_v3.nsec = buf.l.realtime.tv_nsec;
-            log_msg->entry_v3.lid = buf.l.id;
+            log_msg->entry_v4.len = buf.p.len - sizeof(buf);
+            log_msg->entry_v4.hdr_size = is_system ?
+                sizeof(log_msg->entry_v4) :
+                sizeof(log_msg->entry_v3);
+            log_msg->entry_v4.pid = buf.p.pid;
+            log_msg->entry_v4.tid = buf.l.tid;
+            log_msg->entry_v4.sec = buf.l.realtime.tv_sec;
+            log_msg->entry_v4.nsec = buf.l.realtime.tv_nsec;
+            log_msg->entry_v4.lid = buf.l.id;
+            if (is_system) {
+                log_msg->entry_v4.uid = buf.p.uid;
+            }
 
             return ret;
         }
@@ -737,8 +754,9 @@ static void caught_signal(int signum __unused)
 }
 
 /* Read from the selected logs */
-int android_logger_list_read(struct logger_list *logger_list,
-                             struct log_msg *log_msg)
+LIBLOG_ABI_PUBLIC int android_logger_list_read(
+        struct logger_list *logger_list,
+        struct log_msg *log_msg)
 {
     int ret, e;
     struct logger *logger;
@@ -797,6 +815,14 @@ int android_logger_list_read(struct logger_list *logger_list,
         }
 
         if (logger_list->start.tv_sec || logger_list->start.tv_nsec) {
+            if (logger_list->mode & ANDROID_LOG_WRAP) {
+                // ToDo: alternate API to allow timeout to be adjusted.
+                ret = snprintf(cp, remaining, " timeout=%u",
+                               ANDROID_LOG_WRAP_DEFAULT_TIMEOUT);
+                ret = min(ret, remaining);
+                remaining -= ret;
+                cp += ret;
+            }
             ret = snprintf(cp, remaining, " start=%" PRIu32 ".%09" PRIu32,
                            logger_list->start.tv_sec,
                            logger_list->start.tv_nsec);
@@ -808,7 +834,6 @@ int android_logger_list_read(struct logger_list *logger_list,
         if (logger_list->pid) {
             ret = snprintf(cp, remaining, " pid=%u", logger_list->pid);
             ret = min(ret, remaining);
-            remaining -= ret;
             cp += ret;
         }
 
@@ -841,7 +866,6 @@ int android_logger_list_read(struct logger_list *logger_list,
         logger_list->sock = sock;
     }
 
-    ret = 0;
     while(1) {
         memset(log_msg, 0, sizeof(*log_msg));
 
@@ -862,25 +886,18 @@ int android_logger_list_read(struct logger_list *logger_list,
             sigaction(SIGALRM, &old_sigaction, NULL);
         }
 
-        if (ret <= 0) {
-            if ((ret == -1) && e) {
-                return -e;
-            }
-            return ret;
+        if ((ret == -1) && e) {
+            return -e;
         }
-
-        logger_for_each(logger, logger_list) {
-            if (log_msg->entry.lid == logger->id) {
-                return ret;
-            }
-        }
+        return ret;
     }
     /* NOTREACH */
     return ret;
 }
 
 /* Close all the logs */
-void android_logger_list_free(struct logger_list *logger_list)
+LIBLOG_ABI_PUBLIC void android_logger_list_free(
+        struct logger_list *logger_list)
 {
     if (logger_list == NULL) {
         return;

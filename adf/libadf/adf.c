@@ -165,7 +165,7 @@ int adf_device_post(struct adf_device *dev,
 {
     int err;
     struct adf_post_config data;
-
+    struct sprd_adf_post_custom_data *cust_data;
     memset(&data, 0, sizeof(data));
     data.interfaces = interfaces;
     data.n_interfaces = n_interfaces;
@@ -173,7 +173,7 @@ int adf_device_post(struct adf_device *dev,
     data.n_bufs = n_bufs;
     data.custom_data = custom_data;
     data.custom_data_size = custom_data_size;
-
+    cust_data = (struct sprd_adf_post_custom_data *)custom_data;
     err = ioctl(dev->fd, ADF_POST_CONFIG, &data);
     if (err < 0)
         return -errno;

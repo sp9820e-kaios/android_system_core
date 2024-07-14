@@ -56,6 +56,8 @@
 #define E2FSCK_BIN      "/system/bin/e2fsck"
 #define F2FS_FSCK_BIN  "/system/bin/fsck.f2fs"
 #define MKSWAP_BIN      "/system/bin/mkswap"
+#define TUNE2FS_BIN      "/system/bin/tune2fs"
+#define RESIZE2FS_BIN   "/system/bin/resize2fs"
 
 #define FSCK_LOG_FILE   "/dev/fscklogs/log"
 
@@ -93,7 +95,7 @@ static int wait_for_file(const char *filename, int timeout)
     return ret;
 }
 
-static void check_fs(char *blk_device, char *fs_type, char *target)
+static void check_fs(char *blk_device, char *fs_type, char *target, char *fstab_filename)
 {
     int status;
     int ret;
@@ -172,6 +174,43 @@ static void check_fs(char *blk_device, char *fs_type, char *target)
         if (ret < 0) {
             /* No need to check for error in fork, we can't really handle it now */
             ERROR("Failed trying to run %s\n", F2FS_FSCK_BIN);
+        }
+    }
+
+    /* do resize after fs check */
+    if (!strcmp(target, "/data")) {
+        char *resize2fs_argv[] = {
+            RESIZE2FS_BIN,
+            "-ef",
+            fstab_filename
+        };
+        INFO("Running %s on %s, in %s\n", RESIZE2FS_BIN, blk_device, fstab_filename);
+        ret = android_fork_execvp_ext(ARRAY_SIZE(resize2fs_argv), resize2fs_argv,
+                                        &status, true, LOG_KLOG | LOG_FILE,
+                                        true, FSCK_LOG_FILE);
+
+        if (ret < 0) {
+            /* No need to check for error in fork, we can't really handle it now */
+            ERROR("Failed trying to run %s\n", RESIZE2FS_BIN);
+        }
+    }
+
+    /* Set the reserve count for data after fs check */
+    if (!strcmp(target, "/data")) {
+        char *tune2fs_argv[] = {
+            TUNE2FS_BIN,
+            "-r 2560", // 10M reserved for data partition
+            blk_device
+        };
+        INFO("Running %s on %s\n", TUNE2FS_BIN, blk_device);
+
+        ret = android_fork_execvp_ext(ARRAY_SIZE(tune2fs_argv), tune2fs_argv,
+                                        &status, true, LOG_KLOG | LOG_FILE,
+                                        true, FSCK_LOG_FILE);
+
+        if (ret < 0) {
+            /* No need to check for error in fork, we can't really handle it now */
+            ERROR("Failed trying to run %s\n", TUNE2FS_BIN);
         }
     }
 
@@ -330,7 +369,7 @@ static int mount_with_alternatives(struct fstab *fstab, int start_idx, int *end_
 
             if (fstab->recs[i].fs_mgr_flags & MF_CHECK) {
                 check_fs(fstab->recs[i].blk_device, fstab->recs[i].fs_type,
-                         fstab->recs[i].mount_point);
+                         fstab->recs[i].mount_point, fstab->fstab_filename);
             }
             if (!__mount(fstab->recs[i].blk_device, fstab->recs[i].mount_point, &fstab->recs[i])) {
                 *attempted_idx = i;
@@ -682,7 +721,7 @@ int fs_mgr_do_mount(struct fstab *fstab, char *n_name, char *n_blk_device,
 
         if (fstab->recs[i].fs_mgr_flags & MF_CHECK) {
             check_fs(n_blk_device, fstab->recs[i].fs_type,
-                     fstab->recs[i].mount_point);
+                     fstab->recs[i].mount_point, fstab->fstab_filename);
         }
 
         if ((fstab->recs[i].fs_mgr_flags & MF_VERIFY) && device_is_secure()) {

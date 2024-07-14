@@ -337,7 +337,7 @@ static ssize_t get_node_path_locked(struct node* node, char* buf, size_t bufsize
 
     ssize_t pathlen = 0;
     if (node->parent && node->graft_path == NULL) {
-        pathlen = get_node_path_locked(node->parent, buf, bufsize - namelen - 2);
+        pathlen = get_node_path_locked(node->parent, buf, bufsize - namelen - 1);
         if (pathlen < 0) {
             return -1;
         }
@@ -1953,12 +1953,14 @@ int main(int argc, char **argv) {
     if (setrlimit(RLIMIT_NOFILE, &rlim)) {
         ERROR("Error setting RLIMIT_NOFILE, errno = %d\n", errno);
     }
-
+#if 0//merge_kaios
     while ((fs_read_atomic_int("/data/.layout_version", &fs_version) == -1) || (fs_version < 3)) {
         ERROR("installd fs upgrade not yet complete. Waiting...\n");
-        sleep(1);
+       sleep(1);
     }
+#endif
 
+    TRACE("sdcard run source_path=%s, label=%s, uid=%d, gid=%d\n",source_path,label,uid,gid);
     run(source_path, label, uid, gid, userid, multi_user, full_write);
     return 1;
 }

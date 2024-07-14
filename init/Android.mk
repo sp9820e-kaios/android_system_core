@@ -7,7 +7,7 @@ LOCAL_PATH:= $(call my-dir)
 ifneq (,$(filter userdebug eng,$(TARGET_BUILD_VARIANT)))
 init_options += -DALLOW_LOCAL_PROP_OVERRIDE=1 -DALLOW_DISABLE_SELINUX=1
 else
-init_options += -DALLOW_LOCAL_PROP_OVERRIDE=0 -DALLOW_DISABLE_SELINUX=0
+init_options += -DALLOW_LOCAL_PROP_OVERRIDE=0 -DALLOW_DISABLE_SELINUX=1
 endif
 
 init_options += -DLOG_UEVENTS=0
@@ -74,8 +74,9 @@ LOCAL_STATIC_LIBRARIES := \
     libc++_static \
     libdl \
     libsparse_static \
-    libz
-
+    libz \
+    libcutils
+LOCAL_C_INCLUDES += kernel/include/uapi/mtd
 # Create symlinks
 LOCAL_POST_INSTALL_CMD := $(hide) mkdir -p $(TARGET_ROOT_OUT)/sbin; \
     ln -sf ../init $(TARGET_ROOT_OUT)/sbin/ueventd; \

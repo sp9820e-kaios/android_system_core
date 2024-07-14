@@ -62,9 +62,17 @@ struct fstab_rec {
     char *verity_loc;
     long long length;
     char *label;
+    /* SPRD: support double sdcard add for internal SD @{ */
+    char *partnam;
+    char *vold_opt;
+    /* @} */
     int partnum;
     int swap_prio;
     unsigned int zram_size;
+    /* SPRD: add for secure boot @{ */
+    char *secure_boot;
+    char *previous_mountpoint;
+    /* @} */
 };
 
 // Callback function for verity status
